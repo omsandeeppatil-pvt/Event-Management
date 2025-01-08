@@ -169,14 +169,12 @@
         }
 
         .calendar-day {
-            aspect-ratio: 1;
-            padding: 0.5rem;
-            border-radius: var(--radius-sm);
-            background: white;
-            border: 1px solid #E5E7EB;
-            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ddd;
+            padding: 5px;
+            min-height: 80px;
             position: relative;
-            overflow: hidden;
         }
 
         .calendar-day:hover {
@@ -187,7 +185,6 @@
         .calendar-day.today {
             background: var(--primary-color);
             color: white;
-            font-weight: 600;
         }
 
         .calendar-day .date {
@@ -335,7 +332,7 @@
 </head>
 <body>
     <nav class="navbar">
-        <img src="https://upload.wikimedia.org/wikipedia/en/thumb/4/47/Rashtriya_Chemicals_%26_Fertilizers_Logo.svg/1200px-Rashtriya_Chemicals_%26_Fertilizers_Logo.svg.png" alt="Event Manager Logo" class="logo">
+        <img src="/api/placeholder/50/50" alt="Event Manager Logo" class="logo">
         <h1>RCF Event Management</h1>
     </nav>
 
@@ -420,7 +417,7 @@
                         </div>
                     </div>
                     <div class="calendar-wrapper">
-                        <div class="calendar">
+                        <div class="calendar" id="calendarHeader">
                             <div class="calendar-day-header">Sun</div>
                             <div class="calendar-day-header">Mon</div>
                             <div class="calendar-day-header">Tue</div>
@@ -454,244 +451,235 @@
             <button class="btn btn-primary" onclick="document.getElementById('syncModal').style.display = 'none'">Close</button>
         </div>
     </div>
+
     <script>
-        let events = [];
-        let currentDate = moment();
-        const SPREADSHEET_ID = '1sWalEaiuLm40jfj3l1QgVrfDB8aqnT6nJQgGBofQeEE';
-        const API_KEY = 'AIzaSyBe93x9twz_CmmA3LYyNzDLI33MKaqSO6o';
-    
+        const SPREADSHEET_ID = '1sWalEaiuLm40jfj3l1QgVrfDB8aqnT6nJQgGBofQeEE'; // Replace with your actual spreadsheet ID
+        const API_KEY = 'AIzaSyDoFv4E2Ul03ak4YohHP7r-rQmsIGLVfcg'; // Replace with your actual API key
+        
         // Initialize Google API
         function initGoogleAPI() {
-            gapi.load('client', () => {
-                gapi.client
-                    .init({
+            gapi.load('client', async () => {
+                try {
+                    await gapi.client.init({
                         apiKey: API_KEY,
                         discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
-                    })
-                    .then(() => {
-                        console.log('Google API initialized');
-                        ensureSheetExists();
                     });
+                    console.log('Google API initialized');
+                    await loadEventsFromSheet();
+                    updateStats();
+                } catch (error) {
+                    console.error('Error initializing Google API:', error);
+                }
             });
         }
-    
-        // Ensure the 'Events' sheet exists and create it if necessary
-        async function ensureSheetExists() {
-            try {
-                const response = await gapi.client.sheets.spreadsheets.get({
-                    spreadsheetId: SPREADSHEET_ID,
-                });
-    
-                const sheetExists = response.result.sheets.some(
-                    sheet => sheet.properties.title === 'Events'
-                );
-    
-                if (!sheetExists) {
-                    await createSheet();
-                } else {
-                    loadEventsFromSheet();
-                }
-            } catch (error) {
-                console.error('Error ensuring sheet exists:', error);
-            }
-        }
-    
-        // Create the 'Events' sheet with headers
-        async function createSheet() {
-            try {
-                await gapi.client.sheets.spreadsheets.batchUpdate({
-                    spreadsheetId: SPREADSHEET_ID,
-                    resource: {
-                        requests: [
-                            {
-                                addSheet: {
-                                    properties: {
-                                        title: 'Events',
-                                        gridProperties: {
-                                            rowCount: 1000,
-                                            columnCount: 5,
-                                        },
-                                    },
-                                },
-                            },
-                        ],
-                    },
-                });
-    
-                // Add headers to the new sheet
-                await gapi.client.sheets.spreadsheets.values.update({
-                    spreadsheetId: SPREADSHEET_ID,
-                    range: 'Events!A1:E1',
-                    valueInputOption: 'RAW',
-                    resource: {
-                        values: [['ID', 'Name', 'Date', 'Category', 'Description']],
-                    },
-                });
-    
-                console.log('Sheet "Events" created successfully');
-                loadEventsFromSheet();
-            } catch (error) {
-                console.error('Error creating sheet:', error);
-            }
-        }
-    
+
         // Load events from Google Sheets
         async function loadEventsFromSheet() {
             try {
                 const response = await gapi.client.sheets.spreadsheets.values.get({
                     spreadsheetId: SPREADSHEET_ID,
-                    range: 'Events!A:E',
+                    range: 'Events!A2:E',
                 });
-    
-                const rows = response.result.values || [];
-                events = rows.slice(1).map(row => ({
+
+                events = (response.result.values || []).map(row => ({
                     id: row[0],
                     name: row[1],
                     date: row[2],
                     category: row[3],
-                    description: row[4] || '',
+                    description: row[4] || ''
                 }));
-    
+
                 renderCalendar();
                 displayEvents();
+                updateStats();
             } catch (error) {
-                console.error('Error loading events from Google Sheets:', error);
+                console.error('Error loading events:', error);
+                alert('Error loading events. Please try again.');
             }
         }
-    
-        // Save a new event to Google Sheets
+
+        // Save event to Google Sheets
         async function saveEventToSheet(event) {
             try {
-                const newRow = [
-                    event.id.toString(),
-                    event.name,
-                    event.date,
-                    event.category,
-                    event.description,
-                ];
-    
                 await gapi.client.sheets.spreadsheets.values.append({
                     spreadsheetId: SPREADSHEET_ID,
-                    range: 'Events!A:E',
+                    range: 'Events!A2:E',
                     valueInputOption: 'USER_ENTERED',
                     resource: {
-                        values: [newRow],
-                    },
+                        values: [[
+                            event.id,
+                            event.name,
+                            event.date,
+                            event.category,
+                            event.description
+                        ]]
+                    }
                 });
-    
-                console.log('Event saved to Google Sheets');
+                updateStats();
             } catch (error) {
-                console.error('Error saving event to Google Sheets:', error);
+                console.error('Error saving event:', error);
+                alert('Error saving event. Please try again.');
             }
         }
-    
-        // Add a new event
-        async function addEvent() {
-            const name = document.getElementById('eventName').value.trim();
-            const date = document.getElementById('eventDate').value;
-            const category = document.getElementById('eventCategory').value;
-            const description = document.getElementById('eventDescription').value.trim();
-    
-            if (!name || !date || !category) {
+
+        // Add new event
+        async function addEvent(e) {
+            e.preventDefault();
+            
+            const newEvent = {
+                id: Date.now().toString(),
+                name: document.getElementById('eventName').value.trim(),
+                date: document.getElementById('eventDate').value,
+                category: document.getElementById('eventCategory').value,
+                description: document.getElementById('eventDescription').value.trim()
+            };
+
+            if (!newEvent.name || !newEvent.date || !newEvent.category) {
                 alert('Please fill in all required fields.');
                 return;
             }
-    
-            const newEvent = {
-                id: Date.now(),
-                name,
-                date,
-                category,
-                description,
-            };
-    
-            events.push(newEvent);
-            await saveEventToSheet(newEvent);
-            renderCalendar();
-            displayEvents();
-            document.getElementById('eventForm').reset();
-        }
-    
-        // Display events in the list
-        function displayEvents(filterCategory = 'All') {
-            const eventList = document.getElementById('eventList');
-            eventList.innerHTML = '';
-    
-            let filteredEvents = events;
-            if (filterCategory !== 'All') {
-                filteredEvents = events.filter(event => event.category === filterCategory);
+
+            try {
+                await saveEventToSheet(newEvent);
+                events.push(newEvent);
+                renderCalendar();
+                displayEvents();
+                document.getElementById('eventForm').reset();
+            } catch (error) {
+                console.error('Error adding event:', error);
+                alert('Error adding event. Please try again.');
             }
-    
-            filteredEvents.sort((a, b) => moment(a.date).diff(moment(b.date)));
-    
-            filteredEvents.forEach(event => {
-                const eventElement = document.createElement('div');
-                eventElement.className = 'event-item';
-                eventElement.innerHTML = `
-                    <div class="event-time">${moment(event.date).format('MMM D, HH:mm')}</div>
-                    <div class="event-details">
-                        <div class="event-title">${event.name}</div>
-                        <span class="event-category">${event.category}</span>
-                    </div>
-                `;
-                eventList.appendChild(eventElement);
-            });
         }
-    
+
+        // Calendar navigation
+        function previousMonth() {
+            currentDate.subtract(1, 'month');
+            renderCalendar();
+        }
+
+        function nextMonth() {
+            currentDate.add(1, 'month');
+            renderCalendar();
+        }
+
         // Render calendar
         function renderCalendar() {
             const calendar = document.getElementById('calendar');
             const monthLabel = document.getElementById('currentMonth');
             calendar.innerHTML = '';
-    
+
             const firstDay = moment(currentDate).startOf('month');
             const lastDay = moment(currentDate).endOf('month');
             const startDate = moment(firstDay).startOf('week');
             const endDate = moment(lastDay).endOf('week');
-    
+
             monthLabel.textContent = currentDate.format('MMMM YYYY');
-    
-            let tempDate = moment(startDate);
-    
-            while (tempDate.isBefore(endDate)) {
+
+            for (let date = moment(startDate); date.isBefore(endDate); date.add(1, 'day')) {
                 const dayElement = document.createElement('div');
                 dayElement.className = 'calendar-day';
-    
-                if (tempDate.isSame(moment(), 'day')) {
+                
+                if (date.isSame(moment(), 'day')) {
                     dayElement.classList.add('today');
                 }
-    
+
                 const dateLabel = document.createElement('div');
                 dateLabel.className = 'date';
-                dateLabel.textContent = tempDate.format('D');
+                dateLabel.textContent = date.format('D');
                 dayElement.appendChild(dateLabel);
-    
-                const dayEvents = events.filter(event =>
-                    moment(event.date).isSame(tempDate, 'day')
+
+                // Add event indicators
+                const dayEvents = events.filter(event => 
+                    moment(event.date).isSame(date, 'day')
                 );
-    
+
                 if (dayEvents.length > 0) {
-                    const indicator = document.createElement('div');
-                    indicator.className = 'event-indicator';
-                    dayElement.appendChild(indicator);
+                    dayEvents.forEach(event => {
+                        const eventIndicator = document.createElement('div');
+                        eventIndicator.className = 'event-name';
+                        eventIndicator.textContent = event.name;
+                        dayElement.appendChild(eventIndicator);
+                    });
                 }
-    
+
                 calendar.appendChild(dayElement);
-                tempDate.add(1, 'day');
             }
         }
-    
-        // Initial setup
-        window.onload = () => {
-            initGoogleAPI();
-        };
-    
-        // Event form submission
-        document.getElementById('eventForm').addEventListener('submit', function (e) {
-            e.preventDefault();
-            addEvent();
-        });
+
+        // Display events list
+        function displayEvents(category = 'All') {
+            const eventList = document.getElementById('eventList');
+            eventList.innerHTML = '';
+
+            let filteredEvents = events;
+            if (category !== 'All') {
+                filteredEvents = events.filter(event => event.category === category);
+            }
+
+            filteredEvents
+                .sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf())
+                .forEach(event => {
+                    const eventElement = document.createElement('div');
+                    eventElement.className = 'event-item';
+                    eventElement.innerHTML = `
+                        <div class="event-time">${moment(event.date).format('MMM D, HH:mm')}</div>
+                        <div class="event-details">
+                            <div class="event-title">${event.name}</div>
+                            <span class="event-category">${event.category}</span>
+                            ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
+                        </div>
+                    `;
+                    eventList.appendChild(eventElement);
+                });
+        }
+
+        // Update statistics
+        function updateStats() {
+            const stats = {
+                total: events.length,
+                work: events.filter(e => e.category === 'Work').length,
+                personal: events.filter(e => e.category === 'Personal').length,
+                completion: Math.round((events.filter(e => moment(e.date).isBefore(moment())).length / events.length) * 100) || 0
+            };
+
+            document.getElementById('totalEvents').textContent = stats.total;
+            document.getElementById('workEvents').textContent = stats.work;
+            document.getElementById('personalEvents').textContent = stats.personal;
+            document.getElementById('completionRate').textContent = `${stats.completion}%`;
+        }
+
+        // Filter events
+        function filterEvents() {
+            const category = document.getElementById('filterCategory').value;
+            displayEvents(category);
+        }
+
+        // Sync with Google Sheets
+        function syncWithGoogleSheets() {
+            const modal = document.getElementById('syncModal');
+            const status = document.getElementById('syncStatus');
+            
+            modal.style.display = 'flex';
+            status.textContent = 'Syncing...';
+
+            loadEventsFromSheet()
+                .then(() => {
+                    status.textContent = 'Sync completed successfully!';
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                    }, 2000);
+                })
+                .catch(error => {
+                    status.textContent = 'Sync failed. Please try again.';
+                    console.error('Sync error:', error);
+                });
+        }
+
+        // Event listeners
+        document.getElementById('eventForm').addEventListener('submit', addEvent);
+        
+        // Initialize application
+        window.onload = initGoogleAPI;
     </script>
-    
 </body>
-</html>    
+</html>
