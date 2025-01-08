@@ -454,7 +454,7 @@
     <script>
         // Configuration
         const SPREADSHEET_ID = '1sWalEaiuLm40jfj3l1QgVrfDB8aqnT6nJQgGBofQeEE';
-        const API_KEY = 'AIzaSyBe93x9twz_CmmA3LYyNzDLI33MKaqSO6o';
+        const API_KEY = 'AIzaSyBwfdwIaXe_3ukK1dj2Ur9VYbEuwQ5qbrM';
         let events = [];
         let currentDate = moment();
     
@@ -520,24 +520,45 @@
         }
     
         // Save event to Google Sheets
-        async function saveEventToSheet(event) {
-            try {
-                await gapi.client.sheets.spreadsheets.values.append({
-                    spreadsheetId: SPREADSHEET_ID,
-                    range: 'Events!A2:E',
-                    valueInputOption: 'USER_ENTERED',
-                    resource: {
-                        values: [[event.id, event.name, event.date, event.category, event.description]],
-                    },
-                });
-                updateStats();
-                return true;
-            } catch (error) {
-                console.error('Error Saving Event:', error);
-                showError('Failed to save event. Please try again.');
+      async function saveEventToSheet(event, retries = 3) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            // Attempt to save the event to Google Sheets
+            const response = await gapi.client.sheets.spreadsheets.values.append({
+                spreadsheetId: SPREADSHEET_ID,
+                range: 'Events!A2:E',
+                valueInputOption: 'USER_ENTERED',
+                resource: {
+                    values: [[event.id, event.name, event.date, event.category, event.description]],
+                },
+            });
+
+            // Log the response from the API to debug
+            console.log('Event saved successfully:', response);
+
+            // Update stats after successful save
+            updateStats();
+            return true; // Return success
+        } catch (error) {
+            console.error(`Error Saving Event (Attempt ${attempt}):`, error);
+            
+            // Log the specific error response
+            if (error.result) {
+                console.error('API Response Error:', error.result);
+            }
+
+            // If this is the last retry attempt, show an error message
+            if (attempt === retries) {
+                showError('Failed to save event after multiple attempts. Please try again.');
                 return false;
             }
+            
+            // If failed, wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Retry after 1 second
         }
+    }
+}
+
     
         // Add new event
         async function addEvent(e) {
