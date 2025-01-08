@@ -453,8 +453,8 @@
     </div>
     <script>
         // Configuration
-        const SPREADSHEET_ID = '1sWalEaiuLm40jfj3l1QgVrfDB8aqnT6nJQgGBofQeEE';
-        const API_KEY = 'AIzaSyBwfdwIaXe_3ukK1dj2Ur9VYbEuwQ5qbrM';
+        const SPREADSHEET_ID = '1tlh2U27vTCSrTbDtS6XEWnd3j2Mah_OjYRaCUdAGkxo';
+        const API_KEY = 'AIzaSyDoFv4E2Ul03ak4YohHP7r-rQmsIGLVfcg';
         let events = [];
         let currentDate = moment();
     
@@ -562,28 +562,56 @@
     
         // Add new event
         async function addEvent(e) {
-            e.preventDefault();
-    
-            const newEvent = {
-                id: Date.now().toString(),
-                name: document.getElementById('eventName').value.trim(),
-                date: document.getElementById('eventDate').value,
-                category: document.getElementById('eventCategory').value,
-                description: document.getElementById('eventDescription').value.trim(),
-            };
-    
-            if (!newEvent.name) return showError('Please enter an event name.');
-            if (!validateDate(newEvent.date)) return showError('Please enter a valid date.');
-            if (!validateCategory(newEvent.category)) return showError('Please select a valid category.');
-    
-            if (await saveEventToSheet(newEvent)) {
-                events.push(newEvent);
-                renderCalendar();
-                displayEvents();
-                document.getElementById('eventForm').reset();
-            }
+    e.preventDefault();
+
+    const newEvent = {
+        id: Date.now().toString(),
+        name: document.getElementById('eventName').value.trim(),
+        date: document.getElementById('eventDate').value,
+        category: document.getElementById('eventCategory').value,
+        description: document.getElementById('eventDescription').value.trim(),
+    };
+
+    // Validate event data
+    if (!newEvent.name) return showError('Please enter an event name.');
+    if (!validateDate(newEvent.date)) return showError('Please enter a valid date.');
+    if (!validateCategory(newEvent.category)) return showError('Please select a valid category.');
+
+    // Prepare the URL with query parameters
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbygYL956YLPg9NMaFz7lbcaWYphdzqW-1LMUW9nhPNwuYFWl26h8-cHuOPNKT7g7g7raQ/exec';
+    const url = new URL(scriptUrl);
+    url.searchParams.append('id', newEvent.id);
+    url.searchParams.append('name', newEvent.name);
+    url.searchParams.append('date', newEvent.date);
+    url.searchParams.append('category', newEvent.category);
+    url.searchParams.append('description', newEvent.description);
+
+    try {
+        // Send event data to Google Apps Script using fetch
+        const response = await fetch(url, {
+            method: 'GET', // Use GET to send data as URL parameters
+            headers: {
+                'Accept': 'application/json', // Optional, specify response type
+            },
+        });
+
+        // Handle the response
+        const responseText = await response.text();
+        if (responseText.includes('Event saved successfully')) {
+            // If event is saved successfully, update the calendar and event list
+            events.push(newEvent);
+            renderCalendar();
+            displayEvents();
+            document.getElementById('eventForm').reset();
+        } else {
+            showError('Failed to save event. Please try again.');
         }
-    
+    } catch (error) {
+        console.error('Error saving event:', error);
+        showError('An error occurred while saving the event.');
+    }
+}
+
         // Render calendar
         function renderCalendar() {
             const calendar = document.getElementById('calendar');
